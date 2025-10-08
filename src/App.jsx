@@ -495,7 +495,16 @@ function App() {
 
   const tokens = useMemo(() => activeExample.sentence.split(' '), [activeExample.sentence])
 
-  const customTokens = useMemo(() => splitIntoTokens(customSentence), [customSentence])
+  const customTokens = useMemo(() => {
+    if (!customSentence.trim()) {
+      return []
+    }
+
+    return customSentence
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+  }, [customSentence])
 
   const gameExample = useMemo(
     () => EXAMPLES.find((example) => example.id === gameExampleId) ?? EXAMPLES[0],
@@ -564,17 +573,10 @@ function App() {
         rawScores: [],
         contextColor: toColor([0.85, 0.9, 0.95]),
         info: [],
-        headDetails: CUSTOM_HEADS.map((head) => ({
-          id: head.id,
-          name: head.name,
-          description: head.description,
-          weights: [],
-          top: [],
-        })),
       }
     }
 
-    return computeCustomAttention(customTokens, customQueryIndex, customTemperature)
+    return computeAttention(customTokens, customQueryIndex, customTemperature)
   }, [customTokens, customQueryIndex, customTemperature])
 
   const {
@@ -582,7 +584,6 @@ function App() {
     rawScores: customRawScores,
     contextColor: customContextColor,
     info: customInfo,
-    headDetails: customHeadDetails,
   } = customAttention
 
   const customTopInfluences = useMemo(() => {
@@ -897,8 +898,8 @@ function App() {
                 placeholder="Например: Friendly robots happily teach math tricks"
               />
               <p className="custom-hint">
-                Мы автоматически разобьём фразу на отдельные слова и запустим упрощённый многоголовый механизм внимания.
-                Даже незнакомые термины получат синтетические векторы, чтобы вы увидели, как распределится внимание.
+                Мы автоматически разобьём фразу на отдельные слова. Даже незнакомые модели термины получат синтетические
+                векторы, чтобы вы увидели, как распределится внимание.
               </p>
               {!customTokens.length && (
                 <p className="custom-empty">Начните печатать — и слова появятся ниже.</p>
@@ -999,31 +1000,6 @@ function App() {
                         ))}
                       </ol>
                     </div>
-                  </div>
-                </section>
-
-                <section className="panel head-panel">
-                  <h2>Головы внимания делят работу</h2>
-                  <p className="head-intro">
-                    Каждая голова оценивает предложение по-своему: кто-то следит за звучанием, другая — за смыслом. Ниже
-                    показано, какие слова они подсветили сильнее всего.
-                  </p>
-                  <div className="head-grid">
-                    {customHeadDetails.map((head) => (
-                      <article key={head.id} className="head-card">
-                        <header>
-                          <h3>{head.name}</h3>
-                          <p>{head.description}</p>
-                        </header>
-                        <ol>
-                          {head.top.map((item) => (
-                            <li key={`${head.id}-${item.index}`}>
-                              <span className="highlight-word">{item.token}</span> — {formatPercent(item.weight)}
-                            </li>
-                          ))}
-                        </ol>
-                      </article>
-                    ))}
                   </div>
                 </section>
               </>
