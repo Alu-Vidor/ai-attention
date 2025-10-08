@@ -143,7 +143,7 @@ const FALLBACK_CACHE = new Map()
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value))
 
-const tokenKey = (token) => token.toLowerCase().replace(/[^a-z]/g, '')
+const tokenKey = (token) => token.toLowerCase().replace(/[^a-zа-яё0-9-]/gi, '')
 
 const getWordData = (token) => {
   const key = tokenKey(token)
@@ -204,6 +204,268 @@ const computeAttention = (tokens, queryIndex, temperature) => {
     rawScores,
     contextColor: toColor(contextVector),
     info,
+  }
+}
+
+const splitIntoTokens = (text) => {
+  if (!text.trim()) {
+    return []
+  }
+
+  const matches = text
+    .normalize('NFC')
+    .match(/(?:\p{L}+[\p{M}]*|\p{N}+|[^\s\p{L}\p{N}]+)/gu)
+
+  return matches ? matches.map((token) => token.trim()).filter(Boolean) : []
+}
+
+const HEAD_DIMENSION = 8
+
+const CUSTOM_HEADS = [
+  {
+    id: 'shape',
+    name: 'Голова формы',
+    description: 'Чувствует длину слова и его окончания.',
+    seed: 11,
+  },
+  {
+    id: 'sound',
+    name: 'Голова звучания',
+    description: 'Сравнивает похожие звуки и рифмы.',
+    seed: 19,
+  },
+  {
+    id: 'meaning',
+    name: 'Голова смысла',
+    description: 'Следит за тематикой и ролями в предложении.',
+    seed: 29,
+  },
+  {
+    id: 'motion',
+    name: 'Голова действия',
+    description: 'Ищет глаголы и направление движения.',
+    seed: 37,
+  },
+]
+
+const createMatrix = (seed, bias) => {
+  return Array.from({ length: HEAD_DIMENSION }, (_, row) =>
+    Array.from({ length: HEAD_DIMENSION }, (_, column) => {
+      const angle = seed * (row + 1) * (column + 1) * 0.17
+      const swirl = Math.sin(angle) * 0.6 + Math.cos(seed * (row + column + 1) * 0.11) * 0.4
+      const diagonalBoost = row === column ? bias : 0
+      return swirl * 0.6 + diagonalBoost
+    }),
+  )
+}
+
+const HEAD_MATRICES = CUSTOM_HEADS.map((head) => ({
+  query: createMatrix(head.seed, 0.4),
+  key: createMatrix(head.seed + 7, 0.3),
+  value: createMatrix(head.seed + 13, 0.5),
+}))
+
+const multiplyMatrixVector = (matrix, vector) =>
+  matrix.map((row) => row.reduce((sum, weight, index) => sum + weight * vector[index], 0))
+
+const normaliseVector = (vector) => {
+  const norm = Math.sqrt(vector.reduce((acc, value) => acc + value * value, 0))
+  if (!Number.isFinite(norm) || norm === 0) {
+    return Array(vector.length).fill(0)
+  }
+
+  return vector.map((value) => value / norm)
+}
+
+const softmaxWithTemperature = (scores, temperature) => {
+  const safeTemperature = Math.max(temperature, 0.05)
+  const scaled = scores.map((score) => score / safeTemperature)
+  const maxScore = Math.max(...scaled)
+  const exps = scaled.map((score) => Math.exp(score - maxScore))
+  const sumExp = exps.reduce((acc, value) => acc + value, 0) || 1
+  return exps.map((value) => value / sumExp)
+}
+
+const letterRegex = /\p{L}/u
+const vowelRegex = /[аеёиоуыэюяaeiouy]/iu
+const cyrillicRegex = /[а-яё]/i
+const latinRegex = /[a-z]/i
+
+const featureVectorForToken = (token) => {
+  const normalized = token.normalize('NFC')
+  const lower = normalized.toLowerCase()
+  const characters = Array.from(lower)
+  const features = Array(HEAD_DIMENSION).fill(0)
+
+  if (!characters.length) {
+    features[0] = 1
+    return features
+  }
+
+  let vowelCount = 0
+  let letterCount = 0
+  let cyrillicCount = 0
+  let latinCount = 0
+
+  characters.forEach((char, index) => {
+    const code = char.codePointAt(0) ?? 0
+    const bucket = index % HEAD_DIMENSION
+    const mirrorBucket = (HEAD_DIMENSION - 1 - bucket + index) % HEAD_DIMENSION
+    features[bucket] += (Math.sin(code * 0.017 * (index + 1)) + 1.2) * 0.5
+    features[mirrorBucket] += (Math.cos(code * 0.011 * (index + 2)) + 1.3) * 0.4
+
+    if (letterRegex.test(char)) {
+      letterCount += 1
+      if (vowelRegex.test(char)) {
+        vowelCount += 1
+      }
+      if (cyrillicRegex.test(char)) {
+        cyrillicCount += 1
+      }
+      if (latinRegex.test(char)) {
+        latinCount += 1
+      }
+    }
+  })
+
+  const consonantCount = Math.max(letterCount - vowelCount, 0)
+
+  features[0] += characters.length / 6
+  features[1] += vowelCount / Math.max(letterCount, 1)
+  features[2] += consonantCount / Math.max(letterCount, 1)
+  features[3] += cyrillicCount > 0 ? 1 : 0
+  features[4] += latinCount > 0 ? 1 : 0
+  features[5] += /\d/u.test(lower) ? 1 : 0
+  features[6] += /[.,!?;:…]/u.test(normalized) ? 1 : 0
+  features[7] += lower.endsWith('ть') || lower.endsWith('ing') ? 1 : 0
+
+  return normaliseVector(features)
+}
+
+const describeDynamicRole = (token, index, tokens) => {
+  const lower = token.toLowerCase()
+
+  if (/^[.,!?;:…]+$/.test(lower)) {
+    return 'Связывает части предложения'
+  }
+
+  if (/^\d+[.,]?\d*$/.test(lower)) {
+    return 'Число добавляет конкретику'
+  }
+
+  if (['и', 'and', 'но', 'а', 'или', 'or'].includes(lower)) {
+    return 'Соединяет идеи между собой'
+  }
+
+  if (/[а-яё]/i.test(token) && token[0] === token[0].toUpperCase() && token.length > 1) {
+    return 'Возможный герой или имя'
+  }
+
+  if (/(ся|сь|ing|ed|ть|ла|ли)$/.test(lower)) {
+    return 'Показывает действие или процесс'
+  }
+
+  if (/(ый|ая|ое|ий|ие|ly|но)$/.test(lower)) {
+    return 'Определяет признак предмета'
+  }
+
+  if (index === 0) {
+    return 'Задаёт тему предложения'
+  }
+
+  if (index === tokens.length - 1) {
+    return 'Подводит итог мысли'
+  }
+
+  return 'Дополняет общий контекст'
+}
+
+const computeCustomAttention = (tokens, queryIndex, temperature) => {
+  if (!tokens.length) {
+    return {
+      weights: [],
+      rawScores: [],
+      contextColor: toColor([0.85, 0.9, 0.95]),
+      info: [],
+      headDetails: CUSTOM_HEADS.map((head) => ({ ...head, weights: [], top: [] })),
+    }
+  }
+
+  const features = tokens.map((token) => featureVectorForToken(token))
+  const projections = features.map((feature) =>
+    HEAD_MATRICES.map((matrices) => ({
+      query: normaliseVector(multiplyMatrixVector(matrices.query, feature)),
+      key: normaliseVector(multiplyMatrixVector(matrices.key, feature)),
+      value: normaliseVector(multiplyMatrixVector(matrices.value, feature)),
+    })),
+  )
+
+  const headScores = CUSTOM_HEADS.map(() => new Array(tokens.length).fill(0))
+  const headWeights = CUSTOM_HEADS.map(() => new Array(tokens.length).fill(0))
+
+  CUSTOM_HEADS.forEach((_, headIndex) => {
+    const queryVector = projections[queryIndex]?.[headIndex]?.query ?? Array(HEAD_DIMENSION).fill(1 / HEAD_DIMENSION)
+    const scores = tokens.map((_, tokenIndex) => {
+      const keyVector = projections[tokenIndex]?.[headIndex]?.key ?? Array(HEAD_DIMENSION).fill(0)
+      return dot(queryVector, keyVector) / Math.sqrt(HEAD_DIMENSION)
+    })
+
+    headScores[headIndex] = scores
+    headWeights[headIndex] = softmaxWithTemperature(scores, temperature)
+  })
+
+  const weights = tokens.map((_, tokenIndex) =>
+    headWeights.reduce((acc, arr) => acc + (arr[tokenIndex] ?? 0), 0) / (headWeights.length || 1),
+  )
+
+  const rawScores = tokens.map((_, tokenIndex) =>
+    headScores.reduce((acc, arr) => acc + (arr[tokenIndex] ?? 0), 0) / (headScores.length || 1),
+  )
+
+  const contextAccumulator = Array(HEAD_DIMENSION).fill(0)
+
+  tokens.forEach((_, tokenIndex) => {
+    CUSTOM_HEADS.forEach((_, headIndex) => {
+      const weight = headWeights[headIndex][tokenIndex] ?? 0
+      const valueVector = projections[tokenIndex]?.[headIndex]?.value ?? Array(HEAD_DIMENSION).fill(0)
+
+      valueVector.forEach((value, dimension) => {
+        contextAccumulator[dimension] += value * weight
+      })
+    })
+  })
+
+  const contextVector = normaliseVector(contextAccumulator)
+  const colorBase = [contextVector[0], contextVector[3], contextVector[6] ?? contextVector[1] ?? 0]
+  const colorVector = colorBase.map((value) => clamp01(0.5 + value / 2))
+  const contextColor = toColor(colorVector)
+
+  const info = tokens.map((token, index) => ({
+    role: describeDynamicRole(token, index, tokens),
+  }))
+
+  const headDetails = CUSTOM_HEADS.map((head, headIndex) => {
+    const weightsForHead = headWeights[headIndex]
+    const top = tokens
+      .map((token, tokenIndex) => ({ token, index: tokenIndex, weight: weightsForHead[tokenIndex] ?? 0 }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 3)
+
+    return {
+      id: head.id,
+      name: head.name,
+      description: head.description,
+      weights: weightsForHead,
+      top,
+    }
+  })
+
+  return {
+    weights,
+    rawScores,
+    contextColor,
+    info,
+    headDetails,
   }
 }
 
@@ -416,7 +678,7 @@ function App() {
             Придумать свою фразу
           </button>
         </div>
-        {mode === 'explore' ? (
+        {mode === 'explore' && (
           <>
             <section className="panel">
               <h2>Шаг 1. Выберите историю</h2>
@@ -536,7 +798,8 @@ function App() {
               </ul>
             </section>
           </>
-        ) : (
+        )}
+        {mode === 'game' && (
           <section className="panel game-panel">
             <h2>Станьте механизмом внимания</h2>
             <p className="game-description">
