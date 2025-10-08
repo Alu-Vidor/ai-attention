@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const WORD_BANK = {
@@ -210,9 +210,16 @@ const computeAttention = (tokens, queryIndex, temperature) => {
 const formatPercent = (value) => `${Math.round(value * 1000) / 10}%`
 
 function App() {
+  const [mode, setMode] = useState('explore')
   const [exampleId, setExampleId] = useState(EXAMPLES[0].id)
   const [queryIndex, setQueryIndex] = useState(0)
   const [temperature, setTemperature] = useState(1)
+  const [gameExampleId, setGameExampleId] = useState(EXAMPLES[0].id)
+  const [gameQueryIndex, setGameQueryIndex] = useState(0)
+  const [gameScore, setGameScore] = useState(0)
+  const [gameAttempts, setGameAttempts] = useState(0)
+  const [gameRound, setGameRound] = useState(1)
+  const [gameFeedback, setGameFeedback] = useState(null)
 
   const activeExample = useMemo(
     () => EXAMPLES.find((example) => example.id === exampleId) ?? EXAMPLES[0],
@@ -220,6 +227,13 @@ function App() {
   )
 
   const tokens = useMemo(() => activeExample.sentence.split(' '), [activeExample.sentence])
+
+  const gameExample = useMemo(
+    () => EXAMPLES.find((example) => example.id === gameExampleId) ?? EXAMPLES[0],
+    [gameExampleId],
+  )
+
+  const gameTokens = useMemo(() => gameExample.sentence.split(' '), [gameExample.sentence])
 
   useEffect(() => {
     setQueryIndex(0)
@@ -237,6 +251,73 @@ function App() {
       .slice(0, 3)
   }, [tokens, weights])
 
+  const gameAttention = useMemo(() => {
+    if (!gameTokens.length) {
+      return { weights: [] }
+    }
+
+    return computeAttention(gameTokens, gameQueryIndex, 0.7)
+  }, [gameTokens, gameQueryIndex])
+
+  const bestSupportIndex = useMemo(() => {
+    if (!gameTokens.length) {
+      return 0
+    }
+
+    const candidateWeights = gameAttention.weights.map((weight, index) =>
+      index === gameQueryIndex ? -Infinity : weight,
+    )
+    const maxWeight = Math.max(...candidateWeights)
+
+    if (!Number.isFinite(maxWeight) || maxWeight === -Infinity) {
+      return gameQueryIndex
+    }
+
+    return candidateWeights.findIndex((weight) => weight === maxWeight)
+  }, [gameAttention.weights, gameQueryIndex, gameTokens.length])
+
+  const bestSupportWord = gameTokens[bestSupportIndex] ?? '...'
+
+  const initializeGame = useCallback(() => {
+    const randomExample = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]
+    const tokensForExample = randomExample.sentence.split(' ')
+    const randomQuery =
+      tokensForExample.length > 0 ? Math.floor(Math.random() * tokensForExample.length) : 0
+
+    setGameExampleId(randomExample.id)
+    setGameQueryIndex(randomQuery)
+    setGameFeedback(null)
+  }, [])
+
+  useEffect(() => {
+    if (mode === 'game') {
+      setGameScore(0)
+      setGameAttempts(0)
+      setGameRound(1)
+      initializeGame()
+    }
+  }, [mode, initializeGame])
+
+  const handleGameGuess = (index) => {
+    if (gameFeedback || index === gameQueryIndex) {
+      return
+    }
+
+    setGameAttempts((prev) => prev + 1)
+
+    if (index === bestSupportIndex) {
+      setGameScore((prev) => prev + 1)
+      setGameFeedback({ correct: true, index })
+    } else {
+      setGameFeedback({ correct: false, index })
+    }
+  }
+
+  const handleNextRound = () => {
+    setGameRound((prev) => prev + 1)
+    initializeGame()
+  }
+
   return (
     <div className="app">
       <header className="hero">
@@ -249,121 +330,229 @@ function App() {
       </header>
 
       <main className="content">
-        <section className="panel">
-          <h2>Шаг 1. Выберите историю</h2>
-          <div className="example-grid">
-            {EXAMPLES.map((example) => (
-              <button
-                key={example.id}
-                type="button"
-                className={`example-button ${example.id === activeExample.id ? 'active' : ''}`}
-                onClick={() => setExampleId(example.id)}
-              >
-                <span className="example-title">{example.title}</span>
-                <span className="example-sentence">{example.sentence}</span>
-              </button>
-            ))}
-          </div>
-          <p className="takeaway">{activeExample.takeaway}</p>
-        </section>
-
-        <section className="panel">
-          <h2>Шаг 2. Наведите фонарик внимания</h2>
-          <div className="tokens" role="list">
-            {tokens.map((token, index) => {
-              const isSelected = index === queryIndex
-              const contribution = topInfluences.find((item) => item.index === index)
-
-              return (
-                <button
-                  key={`${token}-${index}`}
-                  type="button"
-                  className={`token ${isSelected ? 'selected' : ''} ${contribution ? 'top' : ''}`}
-                  onClick={() => setQueryIndex(index)}
-                  aria-pressed={isSelected}
-                >
-                  <span className="token-word">{token}</span>
-                  {contribution && (
-                    <span className="token-weight">{formatPercent(weights[index])}</span>
-                  )}
-                  {isSelected && <span className="token-focus">фокус</span>}
-                </button>
-              )
-            })}
-          </div>
-          <div className="slider-group">
-            <label htmlFor="temperature">Температура внимания: {temperature.toFixed(1)}</label>
-            <input
-              id="temperature"
-              type="range"
-              min="0.3"
-              max="2"
-              step="0.1"
-              value={temperature}
-              onChange={(event) => setTemperature(Number(event.target.value))}
-            />
-            <p className="slider-hint">
-              Температура показывает, насколько "расфокусирован" фонарик. Низкие значения выделяют пару важных слов, высокие &mdash;
-              распределяют внимание почти поровну.
-            </p>
-          </div>
-        </section>
-
-        <section className="panel">
-          <h2>Шаг 3. Посмотрите, что заметила модель</h2>
-          <div className="attention-cards">
-            {tokens.map((token, index) => (
-              <article key={`${token}-${index}-details`} className="attention-card">
-                <header>
-                  <span className="card-word">{token}</span>
-                  <span className="card-role">{info[index]?.role}</span>
-                </header>
-                <div className="weight-bar">
-                  <div className="weight-bar-fill" style={{ width: `${Math.round(weights[index] * 100)}%` }} />
-                </div>
-                <dl>
-                  <div className="stat">
-                    <dt>Вес внимания</dt>
-                    <dd>{formatPercent(weights[index])}</dd>
-                  </div>
-                  <div className="stat">
-                    <dt>Сырой скоринг</dt>
-                    <dd>{rawScores[index].toFixed(2)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-
-          <div className="context-section">
-            <div className="context-color" style={{ background: contextColor }} aria-hidden />
-            <div>
-              <h3>Смешанный смысл</h3>
-              <p>
-                Модель собирает подсказки со всех слов и получает новый вектор смысла. Цветовое пятно показывает, как именно
-                смешались значения. Самый большой вклад сейчас вносят:
-              </p>
-              <ol>
-                {topInfluences.map((item) => (
-                  <li key={`${item.token}-${item.index}`}>
-                    <span className="highlight-word">{item.token}</span> — {formatPercent(item.weight)}
-                  </li>
+        <div className="view-toggle" role="tablist" aria-label="Режимы взаимодействия">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'explore'}
+            className={`view-tab ${mode === 'explore' ? 'active' : ''}`}
+            onClick={() => setMode('explore')}
+          >
+            Исследовать внимание
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'game'}
+            className={`view-tab ${mode === 'game' ? 'active' : ''}`}
+            onClick={() => setMode('game')}
+          >
+            Станьте вниманием
+          </button>
+        </div>
+        {mode === 'explore' ? (
+          <>
+            <section className="panel">
+              <h2>Шаг 1. Выберите историю</h2>
+              <div className="example-grid">
+                {EXAMPLES.map((example) => (
+                  <button
+                    key={example.id}
+                    type="button"
+                    className={`example-button ${example.id === activeExample.id ? 'active' : ''}`}
+                    onClick={() => setExampleId(example.id)}
+                  >
+                    <span className="example-title">{example.title}</span>
+                    <span className="example-sentence">{example.sentence}</span>
+                  </button>
                 ))}
-              </ol>
-            </div>
-          </div>
-        </section>
+              </div>
+              <p className="takeaway">{activeExample.takeaway}</p>
+            </section>
 
-        <section className="panel tips">
-          <h2>Как читать эту диаграмму</h2>
-          <ul>
-            <li>
-              Внимание похоже на подсветку: чем ярче цвет полоски, тем больше слово помогает понять выделенный фрагмент.
-            </li>
-            <li>Температура регулирует ширину луча внимания: пробуйте крайние значения, чтобы увидеть разницу.</li>
-            <li>В настоящих моделях таких лучей десятки, но принцип остаётся тем же — слова делятся смыслом друг с другом.</li>
-          </ul>
-        </section>
+            <section className="panel">
+              <h2>Шаг 2. Наведите фонарик внимания</h2>
+              <div className="tokens" role="list">
+                {tokens.map((token, index) => {
+                  const isSelected = index === queryIndex
+                  const contribution = topInfluences.find((item) => item.index === index)
+
+                  return (
+                    <button
+                      key={`${token}-${index}`}
+                      type="button"
+                      className={`token ${isSelected ? 'selected' : ''} ${contribution ? 'top' : ''}`}
+                      onClick={() => setQueryIndex(index)}
+                      aria-pressed={isSelected}
+                    >
+                      <span className="token-word">{token}</span>
+                      {contribution && (
+                        <span className="token-weight">{formatPercent(weights[index])}</span>
+                      )}
+                      {isSelected && <span className="token-focus">фокус</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="slider-group">
+                <label htmlFor="temperature">Температура внимания: {temperature.toFixed(1)}</label>
+                <input
+                  id="temperature"
+                  type="range"
+                  min="0.3"
+                  max="2"
+                  step="0.1"
+                  value={temperature}
+                  onChange={(event) => setTemperature(Number(event.target.value))}
+                />
+                <p className="slider-hint">
+                  Температура показывает, насколько "расфокусирован" фонарик. Низкие значения выделяют пару важных слов,
+                  высокие &mdash; распределяют внимание почти поровну.
+                </p>
+              </div>
+            </section>
+
+            <section className="panel">
+              <h2>Шаг 3. Посмотрите, что заметила модель</h2>
+              <div className="attention-cards">
+                {tokens.map((token, index) => (
+                  <article key={`${token}-${index}-details`} className="attention-card">
+                    <header>
+                      <span className="card-word">{token}</span>
+                      <span className="card-role">{info[index]?.role}</span>
+                    </header>
+                    <div className="weight-bar">
+                      <div className="weight-bar-fill" style={{ width: `${Math.round(weights[index] * 100)}%` }} />
+                    </div>
+                    <dl>
+                      <div className="stat">
+                        <dt>Вес внимания</dt>
+                        <dd>{formatPercent(weights[index])}</dd>
+                      </div>
+                      <div className="stat">
+                        <dt>Сырой скоринг</dt>
+                        <dd>{rawScores[index].toFixed(2)}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+
+              <div className="context-section">
+                <div className="context-color" style={{ background: contextColor }} aria-hidden />
+                <div>
+                  <h3>Смешанный смысл</h3>
+                  <p>
+                    Модель собирает подсказки со всех слов и получает новый вектор смысла. Цветовое пятно показывает, как
+                    именно смешались значения. Самый большой вклад сейчас вносят:
+                  </p>
+                  <ol>
+                    {topInfluences.map((item) => (
+                      <li key={`${item.token}-${item.index}`}>
+                        <span className="highlight-word">{item.token}</span> — {formatPercent(item.weight)}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel tips">
+              <h2>Как читать эту диаграмму</h2>
+              <ul>
+                <li>
+                  Внимание похоже на подсветку: чем ярче цвет полоски, тем больше слово помогает понять выделенный фрагмент.
+                </li>
+                <li>Температура регулирует ширину луча внимания: пробуйте крайние значения, чтобы увидеть разницу.</li>
+                <li>
+                  В настоящих моделях таких лучей десятки, но принцип остаётся тем же — слова делятся смыслом друг с другом.
+                </li>
+              </ul>
+            </section>
+          </>
+        ) : (
+          <section className="panel game-panel">
+            <h2>Станьте механизмом внимания</h2>
+            <p className="game-description">
+              Фонарик внимания сейчас смотрит на слово
+              <span className="game-target"> {gameTokens[gameQueryIndex]}</span>. Выберите другое слово, которое, по вашему
+              мнению, получает от него наибольший луч внимания.
+            </p>
+
+            <div className="game-stats">
+              <div className="game-stat">
+                <span className="game-stat-label">Раунд</span>
+                <span className="game-stat-value">{gameRound}</span>
+              </div>
+              <div className="game-stat">
+                <span className="game-stat-label">Очки</span>
+                <span className="game-stat-value">{gameScore}</span>
+              </div>
+              <div className="game-stat">
+                <span className="game-stat-label">Попытки</span>
+                <span className="game-stat-value">{gameAttempts}</span>
+              </div>
+            </div>
+
+            <div className="game-sentence" aria-live="polite">
+              {gameTokens.map((token, index) => (
+                <span
+                  key={`${token}-${index}-preview`}
+                  className={`game-word ${index === gameQueryIndex ? 'target' : ''}`}
+                >
+                  {token}
+                </span>
+              ))}
+            </div>
+
+            <div className="game-token-grid" role="list">
+              {gameTokens.map((token, index) => {
+                const isQuery = index === gameQueryIndex
+                const isCorrectChoice = Boolean(gameFeedback) && index === bestSupportIndex
+                const isSelected = Boolean(gameFeedback) && gameFeedback.index === index
+
+                return (
+                  <button
+                    key={`${token}-${index}-game`}
+                    type="button"
+                    role="listitem"
+                    disabled={isQuery || Boolean(gameFeedback)}
+                    className={`game-token ${isQuery ? 'query' : ''} ${isCorrectChoice ? 'correct' : ''} ${
+                      isSelected && !isCorrectChoice ? 'incorrect' : ''
+                    }`}
+                    onClick={() => handleGameGuess(index)}
+                    aria-label={
+                      isQuery
+                        ? `${token} — на это слово смотрит фонарик`
+                        : `${token} — выбрать это слово в качестве основного влияния`
+                    }
+                  >
+                    <span className="game-token-word">{token}</span>
+                    {isQuery && <span className="game-token-label">фонарик</span>}
+                    {isCorrectChoice && <span className="game-token-label">ответ</span>}
+                  </button>
+                )
+              })}
+            </div>
+
+            {gameFeedback ? (
+              <div className={`game-feedback ${gameFeedback.correct ? 'correct' : 'incorrect'}`} role="status">
+                <p>
+                  {gameFeedback.correct
+                    ? 'Верно! Вы выбрали то же слово, что и модель.'
+                    : `Неправильно. Модель сильнее всего опиралась на слово «${bestSupportWord}».`}
+                </p>
+                <button type="button" className="next-round" onClick={handleNextRound}>
+                  Следующий раунд
+                </button>
+              </div>
+            ) : (
+              <p className="game-hint">
+                Нажмите на слово (кроме выделенного), которое, по вашему мнению, получает больше всего внимания.
+              </p>
+            )}
+          </section>
+        )}
       </main>
 
       <footer className="footer">Создано специально для урока о внимании в нейросетях.</footer>
