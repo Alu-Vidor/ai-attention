@@ -227,6 +227,55 @@
   line-height: 1.4;
 }
 
+.custom-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.custom-label {
+  font-weight: 600;
+  color: #312e81;
+}
+
+.custom-textarea {
+  border-radius: 18px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  padding: 1rem 1.1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  background: rgba(248, 250, 252, 0.85);
+  resize: vertical;
+  min-height: 120px;
+  color: #0f172a;
+}
+
+.custom-textarea:focus {
+  outline: none;
+  border-color: rgba(79, 70, 229, 0.6);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.custom-hint {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.custom-empty {
+  margin: 0;
+  font-weight: 600;
+  color: #7c3aed;
+}
+
+.custom-intro {
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
 .attention-cards {
   display: grid;
   gap: 1rem;

@@ -220,6 +220,11 @@ function App() {
   const [gameAttempts, setGameAttempts] = useState(0)
   const [gameRound, setGameRound] = useState(1)
   const [gameFeedback, setGameFeedback] = useState(null)
+  const [customSentence, setCustomSentence] = useState(
+    'Curious minds invent playful robots together',
+  )
+  const [customQueryIndex, setCustomQueryIndex] = useState(0)
+  const [customTemperature, setCustomTemperature] = useState(1)
 
   const activeExample = useMemo(
     () => EXAMPLES.find((example) => example.id === exampleId) ?? EXAMPLES[0],
@@ -227,6 +232,17 @@ function App() {
   )
 
   const tokens = useMemo(() => activeExample.sentence.split(' '), [activeExample.sentence])
+
+  const customTokens = useMemo(() => {
+    if (!customSentence.trim()) {
+      return []
+    }
+
+    return customSentence
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+  }, [customSentence])
 
   const gameExample = useMemo(
     () => EXAMPLES.find((example) => example.id === gameExampleId) ?? EXAMPLES[0],
@@ -238,6 +254,16 @@ function App() {
   useEffect(() => {
     setQueryIndex(0)
   }, [activeExample])
+
+  useEffect(() => {
+    setCustomQueryIndex((previous) => {
+      if (!customTokens.length) {
+        return 0
+      }
+
+      return Math.min(previous, customTokens.length - 1)
+    })
+  }, [customTokens])
 
   const { weights, rawScores, contextColor, info } = useMemo(
     () => computeAttention(tokens, queryIndex, temperature),
@@ -277,6 +303,37 @@ function App() {
   }, [gameAttention.weights, gameQueryIndex, gameTokens.length])
 
   const bestSupportWord = gameTokens[bestSupportIndex] ?? '...'
+
+  const customAttention = useMemo(() => {
+    if (!customTokens.length) {
+      return {
+        weights: [],
+        rawScores: [],
+        contextColor: toColor([0.85, 0.9, 0.95]),
+        info: [],
+      }
+    }
+
+    return computeAttention(customTokens, customQueryIndex, customTemperature)
+  }, [customTokens, customQueryIndex, customTemperature])
+
+  const {
+    weights: customWeights,
+    rawScores: customRawScores,
+    contextColor: customContextColor,
+    info: customInfo,
+  } = customAttention
+
+  const customTopInfluences = useMemo(() => {
+    if (!customTokens.length) {
+      return []
+    }
+
+    return customTokens
+      .map((token, index) => ({ token, index, weight: customWeights[index] }))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 3)
+  }, [customTokens, customWeights])
 
   const initializeGame = useCallback(() => {
     const randomExample = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]
@@ -348,6 +405,15 @@ function App() {
             onClick={() => setMode('game')}
           >
             Станьте вниманием
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'custom'}
+            className={`view-tab ${mode === 'custom' ? 'active' : ''}`}
+            onClick={() => setMode('custom')}
+          >
+            Придумать свою фразу
           </button>
         </div>
         {mode === 'explore' ? (
@@ -552,6 +618,130 @@ function App() {
               </p>
             )}
           </section>
+        )}
+        {mode === 'custom' && (
+          <>
+            <section className="panel custom-builder">
+              <h2>Соберите собственное предложение</h2>
+              <label className="custom-label" htmlFor="custom-sentence">
+                Напишите фразу, за которой будет наблюдать модель
+              </label>
+              <textarea
+                id="custom-sentence"
+                className="custom-textarea"
+                value={customSentence}
+                onChange={(event) => setCustomSentence(event.target.value)}
+                rows={3}
+                placeholder="Например: Friendly robots happily teach math tricks"
+              />
+              <p className="custom-hint">
+                Мы автоматически разобьём фразу на отдельные слова. Даже незнакомые модели термины получат синтетические
+                векторы, чтобы вы увидели, как распределится внимание.
+              </p>
+              {!customTokens.length && (
+                <p className="custom-empty">Начните печатать — и слова появятся ниже.</p>
+              )}
+            </section>
+
+            {customTokens.length > 0 && (
+              <>
+                <section className="panel">
+                  <h2>Выберите слово с фонариком</h2>
+                  <p className="custom-intro">
+                    Нажмите на слово, чтобы сделать его запросом. Ползунок помогает регулировать ширину луча внимания.
+                  </p>
+                  <div className="tokens" role="list">
+                    {customTokens.map((token, index) => {
+                      const isSelected = index === customQueryIndex
+                      const contribution = customTopInfluences.find((item) => item.index === index)
+
+                      return (
+                        <button
+                          key={`${token}-${index}-custom`}
+                          type="button"
+                          className={`token ${isSelected ? 'selected' : ''} ${contribution ? 'top' : ''}`}
+                          onClick={() => setCustomQueryIndex(index)}
+                          aria-pressed={isSelected}
+                        >
+                          <span className="token-word">{token}</span>
+                          {contribution && (
+                            <span className="token-weight">{formatPercent(customWeights[index])}</span>
+                          )}
+                          {isSelected && <span className="token-focus">фонарик</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="slider-group">
+                    <label htmlFor="custom-temperature">
+                      Температура внимания: {customTemperature.toFixed(1)}
+                    </label>
+                    <input
+                      id="custom-temperature"
+                      type="range"
+                      min="0.3"
+                      max="2"
+                      step="0.1"
+                      value={customTemperature}
+                      onChange={(event) => setCustomTemperature(Number(event.target.value))}
+                    />
+                    <p className="slider-hint">
+                      Слишком низкая температура делает модель придирчивой, а высокая показывает, как слова делят внимание
+                      почти поровну.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="panel">
+                  <h2>Распределение внимания для вашей фразы</h2>
+                  <div className="attention-cards">
+                    {customTokens.map((token, index) => (
+                      <article key={`${token}-${index}-custom-details`} className="attention-card">
+                        <header>
+                          <span className="card-word">{token}</span>
+                          <span className="card-role">{customInfo[index]?.role}</span>
+                        </header>
+                        <div className="weight-bar">
+                          <div
+                            className="weight-bar-fill"
+                            style={{ width: `${Math.round((customWeights[index] ?? 0) * 100)}%` }}
+                          />
+                        </div>
+                        <dl>
+                          <div className="stat">
+                            <dt>Вес внимания</dt>
+                            <dd>{formatPercent(customWeights[index] ?? 0)}</dd>
+                          </div>
+                          <div className="stat">
+                            <dt>Сырой скоринг</dt>
+                            <dd>{(customRawScores[index] ?? 0).toFixed(2)}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="context-section">
+                    <div className="context-color" style={{ background: customContextColor }} aria-hidden />
+                    <div>
+                      <h3>Что выделила модель</h3>
+                      <p>
+                        Слова смешиваются в общий смысл: яркость цвета показывает вклад значений. Топовые влияния сейчас:
+                      </p>
+                      <ol>
+                        {customTopInfluences.map((item) => (
+                          <li key={`${item.token}-${item.index}-summary`}>
+                            <span className="highlight-word">{item.token}</span> — {formatPercent(item.weight)}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+          </>
         )}
       </main>
 
