@@ -498,6 +498,17 @@
   color: #b91c1c;
 }
 
+.game-summary {
+  padding: 1.5rem;
+  border-radius: 18px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
+  font-weight: 600;
+  text-align: center;
+  display: grid;
+  gap: 1rem;
+}
+
 .next-round {
   border: none;
   border-radius: 999px;

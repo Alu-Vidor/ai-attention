@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const WORD_BANK = {
@@ -112,31 +112,146 @@ const WORD_BANK = {
     value: [0.98, 0.74, 0.64],
     role: 'центр притяжения',
   },
+  'любопытный': {
+    embedding: [0.78, 0.42, 0.6],
+    value: [0.96, 0.73, 0.92],
+    role: 'описывает характер героя',
+  },
+  'кот': {
+    embedding: [0.9, 0.27, 0.58],
+    value: [0.98, 0.67, 0.42],
+    role: 'главный герой предложения',
+  },
+  'тихо': {
+    embedding: [0.64, 0.74, 0.32],
+    value: [0.74, 0.86, 0.95],
+    role: 'характеризует действие',
+  },
+  'следил': {
+    embedding: [0.71, 0.61, 0.25],
+    value: [0.83, 0.7, 0.95],
+    role: 'главный глагол наблюдения',
+  },
+  'порхающей': {
+    embedding: [0.56, 0.84, 0.48],
+    value: [0.7, 0.95, 0.82],
+    role: 'передаёт лёгкое движение',
+  },
+  'бабочкой': {
+    embedding: [0.62, 0.38, 0.86],
+    value: [0.92, 0.71, 0.98],
+    role: 'на что направлено внимание',
+  },
+  'маленький': {
+    embedding: [0.48, 0.72, 0.28],
+    value: [0.78, 0.9, 0.62],
+    role: 'подчеркивает размер героя',
+  },
+  'робот': {
+    embedding: [0.66, 0.54, 0.82],
+    value: [0.71, 0.82, 0.98],
+    role: 'исполнитель действия',
+  },
+  'помогает': {
+    embedding: [0.59, 0.63, 0.33],
+    value: [0.75, 0.84, 0.96],
+    role: 'показывает действие помощи',
+  },
+  'ученикам': {
+    embedding: [0.82, 0.46, 0.44],
+    value: [0.98, 0.78, 0.67],
+    role: 'кому помогают',
+  },
+  'решать': {
+    embedding: [0.58, 0.68, 0.41],
+    value: [0.74, 0.86, 0.97],
+    role: 'что делают ученики',
+  },
+  'хитрые': {
+    embedding: [0.72, 0.4, 0.71],
+    value: [0.92, 0.74, 0.91],
+    role: 'характеризует задачи',
+  },
+  'задачи': {
+    embedding: [0.63, 0.44, 0.83],
+    value: [0.85, 0.74, 0.98],
+    role: 'что решают',
+  },
+  'математика': {
+    embedding: [0.81, 0.53, 0.39],
+    value: [0.97, 0.79, 0.58],
+    role: 'главная тема',
+  },
+  'объясняет': {
+    embedding: [0.74, 0.58, 0.36],
+    value: [0.8, 0.82, 0.96],
+    role: 'делает понятным',
+  },
+  'как': {
+    embedding: [0.42, 0.56, 0.31],
+    value: [0.72, 0.86, 0.95],
+    role: 'связывает части предложения',
+  },
+  'планеты': {
+    embedding: [0.68, 0.52, 0.88],
+    value: [0.77, 0.83, 0.98],
+    role: 'о чём идёт речь',
+  },
+  'кружатся': {
+    embedding: [0.64, 0.59, 0.44],
+    value: [0.82, 0.74, 0.96],
+    role: 'показывает движение',
+  },
+  'вокруг': {
+    embedding: [0.36, 0.64, 0.42],
+    value: [0.68, 0.87, 0.92],
+    role: 'указывает направление',
+  },
+  'солнца': {
+    embedding: [0.77, 0.49, 0.78],
+    value: [0.98, 0.74, 0.64],
+    role: 'центр притяжения',
+  },
 }
 
 const EXAMPLES = [
   {
     id: 'butterfly',
     title: 'Кот наблюдает за бабочкой',
-    sentence: 'The curious cat quietly watched the fluttering butterfly',
+    sentence: 'Любопытный кот тихо следил за порхающей бабочкой.',
     takeaway:
-      'Попробуйте выбрать разные слова, чтобы увидеть, как внимание "переключается" между описанием героя и объектом наблюдения.',
+      'Попробуйте выбрать разные слова, чтобы увидеть, как внимание «переключается» между описанием героя и объектом наблюдения.',
   },
   {
     id: 'robot',
     title: 'Робот помогает ученикам',
-    sentence: 'A small robot helps students solve tricky puzzles',
+    sentence: 'Маленький робот помогает ученикам решать хитрые задачи.',
     takeaway:
       'Внимание робота сосредотачивается на том, кому он помогает и какие задачи решаются.',
   },
   {
     id: 'planets',
-    title: 'Планеты танцуют вокруг солнца',
-    sentence: 'Math explains how planets dance around the sun',
+    title: 'Планеты кружатся вокруг солнца',
+    sentence: 'Математика объясняет, как планеты кружатся вокруг солнца.',
     takeaway:
       'Здесь видно, как внимание связывает научное объяснение и космическое действие.',
   },
 ]
+
+const GAME_PROMPTS = [
+  { id: 'pianist', sentence: 'Юный пианист уверенно исполнил мелодию перед залом.' },
+  { id: 'science-robot', sentence: 'Учёный робот тщательно анализирует данные о климате.' },
+  { id: 'berries-drone', sentence: 'Дружелюбный дрон доставил свежие ягоды на поляну.' },
+  { id: 'explorer', sentence: 'Смелая исследовательница нашла древние рисунки в пещере.' },
+  { id: 'teacher-clouds', sentence: 'Учитель объясняет, почему облака меняют форму на закате.' },
+  { id: 'waves', sentence: 'Шёпот волн убаюкивает город, пока фонари гаснут.' },
+  { id: 'engineers', sentence: 'Команда инженеров запускает светящийся спутник на орбиту.' },
+  { id: 'writer', sentence: 'Писатель записал фантастическую идею в старый блокнот.' },
+  { id: 'athlete', sentence: 'Спортсменка ловко преодолевает препятствия на трассе.' },
+  { id: 'coders', sentence: 'Юные программисты создали игру про путешествия во времени.' },
+]
+
+const GAME_ROUNDS = 10
 
 const DIMENSION = 3
 const FALLBACK_CACHE = new Map()
@@ -471,19 +586,34 @@ const computeCustomAttention = (tokens, queryIndex, temperature) => {
 
 const formatPercent = (value) => `${Math.round(value * 1000) / 10}%`
 
+const shuffleArray = (array) => {
+  const copy = [...array]
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]]
+  }
+
+  return copy
+}
+
+const createGameDeck = () => shuffleArray(GAME_PROMPTS).slice(0, GAME_ROUNDS)
+
 function App() {
   const [mode, setMode] = useState('explore')
   const [exampleId, setExampleId] = useState(EXAMPLES[0].id)
   const [queryIndex, setQueryIndex] = useState(0)
   const [temperature, setTemperature] = useState(1)
-  const [gameExampleId, setGameExampleId] = useState(EXAMPLES[0].id)
+  const [gameExampleId, setGameExampleId] = useState(GAME_PROMPTS[0].id)
   const [gameQueryIndex, setGameQueryIndex] = useState(0)
   const [gameScore, setGameScore] = useState(0)
   const [gameAttempts, setGameAttempts] = useState(0)
   const [gameRound, setGameRound] = useState(1)
   const [gameFeedback, setGameFeedback] = useState(null)
+  const [gameDeck, setGameDeck] = useState(() => createGameDeck())
+  const [gameFinished, setGameFinished] = useState(false)
   const [customSentence, setCustomSentence] = useState(
-    'Curious minds invent playful robots together',
+    'Любознательные дети придумывают смелые истории',
   )
   const [customQueryIndex, setCustomQueryIndex] = useState(0)
   const [customTemperature, setCustomTemperature] = useState(1)
@@ -493,25 +623,22 @@ function App() {
     [exampleId],
   )
 
-  const tokens = useMemo(() => activeExample.sentence.split(' '), [activeExample.sentence])
+  const tokens = useMemo(() => splitIntoTokens(activeExample.sentence), [activeExample.sentence])
 
   const customTokens = useMemo(() => {
     if (!customSentence.trim()) {
       return []
     }
 
-    return customSentence
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
+    return splitIntoTokens(customSentence)
   }, [customSentence])
 
   const gameExample = useMemo(
-    () => EXAMPLES.find((example) => example.id === gameExampleId) ?? EXAMPLES[0],
+    () => GAME_PROMPTS.find((example) => example.id === gameExampleId) ?? GAME_PROMPTS[0],
     [gameExampleId],
   )
 
-  const gameTokens = useMemo(() => gameExample.sentence.split(' '), [gameExample.sentence])
+  const gameTokens = useMemo(() => splitIntoTokens(gameExample.sentence), [gameExample.sentence])
 
   useEffect(() => {
     setQueryIndex(0)
@@ -597,28 +724,38 @@ function App() {
       .slice(0, 3)
   }, [customTokens, customWeights])
 
-  const initializeGame = useCallback(() => {
-    const randomExample = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)]
-    const tokensForExample = randomExample.sentence.split(' ')
+  const startRound = (roundNumber, deckOverride) => {
+    const deckToUse = deckOverride ?? gameDeck
+    const example = deckToUse[roundNumber - 1]
+
+    if (!example) {
+      setGameFinished(true)
+      return
+    }
+
+    const tokensForExample = splitIntoTokens(example.sentence)
     const randomQuery =
       tokensForExample.length > 0 ? Math.floor(Math.random() * tokensForExample.length) : 0
 
-    setGameExampleId(randomExample.id)
+    setGameExampleId(example.id)
     setGameQueryIndex(randomQuery)
     setGameFeedback(null)
-  }, [])
+  }
 
   useEffect(() => {
     if (mode === 'game') {
+      const newDeck = createGameDeck()
+      setGameDeck(newDeck)
       setGameScore(0)
       setGameAttempts(0)
       setGameRound(1)
-      initializeGame()
+      setGameFinished(false)
+      startRound(1, newDeck)
     }
-  }, [mode, initializeGame])
+  }, [mode])
 
   const handleGameGuess = (index) => {
-    if (gameFeedback || index === gameQueryIndex) {
+    if (gameFinished || gameFeedback || index === gameQueryIndex) {
       return
     }
 
@@ -633,9 +770,29 @@ function App() {
   }
 
   const handleNextRound = () => {
-    setGameRound((prev) => prev + 1)
-    initializeGame()
+    if (gameRound >= GAME_ROUNDS) {
+      setGameFeedback(null)
+      setGameFinished(true)
+      return
+    }
+
+    const nextRound = gameRound + 1
+    setGameRound(nextRound)
+    startRound(nextRound)
   }
+
+  const handleRestartGame = () => {
+    const newDeck = createGameDeck()
+    setGameDeck(newDeck)
+    setGameScore(0)
+    setGameAttempts(0)
+    setGameRound(1)
+    setGameFinished(false)
+    startRound(1, newDeck)
+  }
+
+  const displayedRound = Math.min(gameRound, GAME_ROUNDS)
+  const gameQueryWord = gameTokens[gameQueryIndex] ?? '…'
 
   return (
     <div className="app">
@@ -803,15 +960,25 @@ function App() {
           <section className="panel game-panel">
             <h2>Станьте механизмом внимания</h2>
             <p className="game-description">
-              Фонарик внимания сейчас смотрит на слово
-              <span className="game-target"> {gameTokens[gameQueryIndex]}</span>. Выберите другое слово, которое, по вашему
-              мнению, получает от него наибольший луч внимания.
+              {gameFinished ? (
+                <>
+                  Все {GAME_ROUNDS} раундов пройдены. Посмотрите результат ниже или начните новую серию.
+                </>
+              ) : (
+                <>
+                  Вас ждёт {GAME_ROUNDS} раундов с разными предложениями. Фонарик внимания сейчас смотрит на слово
+                  <span className="game-target"> {gameQueryWord}</span>. Выберите другое слово, которое, по вашему мнению,
+                  получает от него наибольший луч внимания.
+                </>
+              )}
             </p>
 
             <div className="game-stats">
               <div className="game-stat">
                 <span className="game-stat-label">Раунд</span>
-                <span className="game-stat-value">{gameRound}</span>
+                <span className="game-stat-value">
+                  {displayedRound} / {GAME_ROUNDS}
+                </span>
               </div>
               <div className="game-stat">
                 <span className="game-stat-label">Очки</span>
@@ -823,48 +990,61 @@ function App() {
               </div>
             </div>
 
-            <div className="game-sentence" aria-live="polite">
-              {gameTokens.map((token, index) => (
-                <span
-                  key={`${token}-${index}-preview`}
-                  className={`game-word ${index === gameQueryIndex ? 'target' : ''}`}
-                >
-                  {token}
-                </span>
-              ))}
-            </div>
+            {!gameFinished && (
+              <>
+                <div className="game-sentence" aria-live="polite">
+                  {gameTokens.map((token, index) => (
+                    <span
+                      key={`${token}-${index}-preview`}
+                      className={`game-word ${index === gameQueryIndex ? 'target' : ''}`}
+                    >
+                      {token}
+                    </span>
+                  ))}
+                </div>
 
-            <div className="game-token-grid" role="list">
-              {gameTokens.map((token, index) => {
-                const isQuery = index === gameQueryIndex
-                const isCorrectChoice = Boolean(gameFeedback) && index === bestSupportIndex
-                const isSelected = Boolean(gameFeedback) && gameFeedback.index === index
+                <div className="game-token-grid" role="list">
+                  {gameTokens.map((token, index) => {
+                    const isQuery = index === gameQueryIndex
+                    const isCorrectChoice = Boolean(gameFeedback) && index === bestSupportIndex
+                    const isSelected = Boolean(gameFeedback) && gameFeedback.index === index
 
-                return (
-                  <button
-                    key={`${token}-${index}-game`}
-                    type="button"
-                    role="listitem"
-                    disabled={isQuery || Boolean(gameFeedback)}
-                    className={`game-token ${isQuery ? 'query' : ''} ${isCorrectChoice ? 'correct' : ''} ${
-                      isSelected && !isCorrectChoice ? 'incorrect' : ''
-                    }`}
-                    onClick={() => handleGameGuess(index)}
-                    aria-label={
-                      isQuery
-                        ? `${token} — на это слово смотрит фонарик`
-                        : `${token} — выбрать это слово в качестве основного влияния`
-                    }
-                  >
-                    <span className="game-token-word">{token}</span>
-                    {isQuery && <span className="game-token-label">фонарик</span>}
-                    {isCorrectChoice && <span className="game-token-label">ответ</span>}
-                  </button>
-                )
-              })}
-            </div>
+                    return (
+                      <button
+                        key={`${token}-${index}-game`}
+                        type="button"
+                        role="listitem"
+                        disabled={isQuery || Boolean(gameFeedback)}
+                        className={`game-token ${isQuery ? 'query' : ''} ${isCorrectChoice ? 'correct' : ''} ${
+                          isSelected && !isCorrectChoice ? 'incorrect' : ''
+                        }`}
+                        onClick={() => handleGameGuess(index)}
+                        aria-label={
+                          isQuery
+                            ? `${token} — на это слово смотрит фонарик`
+                            : `${token} — выбрать это слово в качестве основного влияния`
+                        }
+                      >
+                        <span className="game-token-word">{token}</span>
+                        {isQuery && <span className="game-token-label">фонарик</span>}
+                        {isCorrectChoice && <span className="game-token-label">ответ</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
-            {gameFeedback ? (
+            {gameFinished ? (
+              <div className="game-summary" role="status">
+                <p>
+                  Игра завершена! Вы набрали {gameScore} из {GAME_ROUNDS} возможных очков за {gameAttempts} попыток.
+                </p>
+                <button type="button" className="next-round" onClick={handleRestartGame}>
+                  Сыграть ещё раз
+                </button>
+              </div>
+            ) : gameFeedback ? (
               <div className={`game-feedback ${gameFeedback.correct ? 'correct' : 'incorrect'}`} role="status">
                 <p>
                   {gameFeedback.correct
@@ -872,7 +1052,7 @@ function App() {
                     : `Неправильно. Модель сильнее всего опиралась на слово «${bestSupportWord}».`}
                 </p>
                 <button type="button" className="next-round" onClick={handleNextRound}>
-                  Следующий раунд
+                  {gameRound >= GAME_ROUNDS ? 'Завершить игру' : 'Следующий раунд'}
                 </button>
               </div>
             ) : (
@@ -895,7 +1075,7 @@ function App() {
                 value={customSentence}
                 onChange={(event) => setCustomSentence(event.target.value)}
                 rows={3}
-                placeholder="Например: Friendly robots happily teach math tricks"
+                placeholder="Например: Тёплые лучи заката красят город золотом"
               />
               <p className="custom-hint">
                 Мы автоматически разобьём фразу на отдельные слова. Даже незнакомые модели термины получат синтетические
